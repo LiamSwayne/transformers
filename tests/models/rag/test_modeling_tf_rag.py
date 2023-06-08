@@ -915,25 +915,6 @@ class TFRagModelIntegrationTests(unittest.TestCase):
             truncation=True,
         )
 
-        input_ids = input_dict.input_ids
-
-        question_hidden_states = rag_sequence.question_encoder(input_ids)[0]
-        docs_dict = retriever(input_ids.numpy(), question_hidden_states.numpy(), return_tensors="tf")
-        doc_scores = tf.squeeze(
-            tf.matmul(
-                tf.expand_dims(question_hidden_states, axis=[1]), docs_dict["retrieved_doc_embeds"], transpose_b=True
-            ),
-            axis=[1],
-        )
-        output_ids = rag_sequence.generate(
-            context_input_ids=docs_dict["context_input_ids"],
-            context_attention_mask=docs_dict["context_attention_mask"],
-            doc_scores=doc_scores,
-            do_deduplication=True,
-        )
-
-        outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-
         EXPECTED_OUTPUTS = [
             " albert einstein",
             " june 22, 2018",
@@ -944,7 +925,32 @@ class TFRagModelIntegrationTests(unittest.TestCase):
             " 7.0",
             " 8",
         ]
-        self.assertListEqual(outputs, EXPECTED_OUTPUTS)
+
+        input_ids = input_dict.input_ids
+
+        # Split into 4 batches of 2 examples to avoid GPU OOM.
+        for batch_idx in range(4):
+            start = batch_idx * 2
+            end = (batch_idx + 1) * 2
+
+            question_hidden_states = rag_sequence.question_encoder(input_ids[start:end])[0]
+            docs_dict = retriever(input_ids[start:end].numpy(), question_hidden_states.numpy(), return_tensors="tf")
+            doc_scores = tf.squeeze(
+                tf.matmul(
+                    tf.expand_dims(question_hidden_states, axis=[1]), docs_dict["retrieved_doc_embeds"], transpose_b=True
+                ),
+                axis=[1],
+            )
+            output_ids = rag_sequence.generate(
+                context_input_ids=docs_dict["context_input_ids"],
+                context_attention_mask=docs_dict["context_attention_mask"],
+                doc_scores=doc_scores,
+                do_deduplication=True,
+            )
+
+            outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+
+            self.assertListEqual(outputs, EXPECTED_OUTPUTS[start:end])
 
 
 @require_tf
