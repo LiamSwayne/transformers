@@ -850,20 +850,16 @@ class TFRagModelIntegrationTests(unittest.TestCase):
             " 13",
         ]
 
-        # Split into 2 batches of 4 examples to avoid GPU OOM.
-        output_ids = rag_token.generate(
-            input_ids[:4],
-            attention_mask=attention_mask[:4],
-        )
-        outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-        self.assertListEqual(outputs, EXPECTED_OUTPUTS[:4])
-
-        output_ids = rag_token.generate(
-            input_ids[4:],
-            attention_mask=attention_mask[4:],
-        )
-        outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-        self.assertListEqual(outputs, EXPECTED_OUTPUTS[4:])
+        # Split into 4 batches of 2 examples to avoid GPU OOM.
+        for batch_idx in range(4):
+            start = batch_idx * 2
+            end = (batch_idx + 1) * 2
+            output_ids = rag_token.generate(
+                input_ids[start:end],
+                attention_mask=attention_mask[start:end],
+            )
+            outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+            self.assertListEqual(outputs, EXPECTED_OUTPUTS[start:end])
 
     @slow
     def test_rag_sequence_generate_batch(self):
@@ -883,13 +879,6 @@ class TFRagModelIntegrationTests(unittest.TestCase):
         input_ids = input_dict.input_ids
         attention_mask = input_dict.attention_mask
 
-        output_ids = rag_sequence.generate(
-            input_ids,
-            attention_mask=attention_mask,
-        )
-
-        outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-
         EXPECTED_OUTPUTS = [
             " albert einstein",
             " june 22, 2018",
@@ -900,7 +889,17 @@ class TFRagModelIntegrationTests(unittest.TestCase):
             " 7.0",
             " 8",
         ]
-        self.assertListEqual(outputs, EXPECTED_OUTPUTS)
+
+        # Split into 4 batches of 2 examples to avoid GPU OOM.
+        for batch_idx in range(4):
+            start = batch_idx * 2
+            end = (batch_idx + 1) * 2
+            output_ids = rag_sequence.generate(
+                input_ids[start:end],
+                attention_mask=attention_mask[start:end],
+            )
+            outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+            self.assertListEqual(outputs, EXPECTED_OUTPUTS[start:end])
 
     @slow
     def test_rag_sequence_generate_batch_from_context_input_ids(self):
